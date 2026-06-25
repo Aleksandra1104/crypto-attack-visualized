@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>51% Attack — Double-Spend Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#020603;--panel:#05110A;--panel2:#081A0F;
+    --green:#3CFF78;--green-b:#9DFFC0;--green-dim:#1f7a45;--green-soft:rgba(60,255,120,.10);
+    --red:#FF3B47;--red-b:#FF8A90;--red-soft:rgba(255,59,71,.12);
+    --amber:#FFC24B;
+    --steel:#52C7B0;--steel-soft:rgba(82,199,176,.10);
+    --ink:#BFF7D4;--muted:#5E9A77;--faint:#356b4d;
+    --mono:'Share Tech Mono',ui-monospace,monospace;--crt:'VT323',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:15px;line-height:1.5;
+    letter-spacing:.02em;padding:24px clamp(14px,3.5vw,44px) 60px;position:relative;min-height:100vh}
+  #rain{position:fixed;inset:0;z-index:0;opacity:.14;pointer-events:none}
+  body::after{content:"";position:fixed;inset:0;z-index:50;pointer-events:none;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.22) 3px,rgba(0,0,0,0) 4px);mix-blend-mode:multiply}
+  .wrap{max-width:1180px;margin:0 auto;position:relative;z-index:1}
+
+  .term{border:1px solid var(--green-dim);background:rgba(5,17,10,.86);border-radius:6px;
+    box-shadow:0 0 0 1px rgba(60,255,120,.08),0 0 40px rgba(0,0,0,.6);backdrop-filter:blur(2px)}
+  .barwin{display:flex;align-items:center;gap:10px;padding:8px 13px;border-bottom:1px solid var(--green-dim);color:var(--muted);font-size:13px}
+  .barwin .dots{display:flex;gap:6px}.barwin .dots i{width:10px;height:10px;border-radius:50%;display:block;border:1px solid var(--green-dim)}
+  .barwin .dots i:nth-child(1){background:#3a0d0f;border-color:#7a1b1f}
+  .barwin .dots i:nth-child(2){background:#3a2c0a}
+  .barwin .dots i:nth-child(3){background:#0c3a1a}
+  .barwin .path{color:var(--green)}
+  .pad{padding:20px clamp(14px,2.5vw,26px)}
+
+  header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:18px 26px}
+  h1{font-family:var(--crt);font-weight:400;margin:0;line-height:.84;font-size:clamp(46px,9vw,92px);color:var(--green);
+    text-shadow:0 0 6px rgba(60,255,120,.5),0 0 22px rgba(60,255,120,.28);animation:flick 6s infinite steps(60)}
+  @keyframes flick{0%,96%,100%{opacity:1}97%{opacity:.78}98%{opacity:1}99%{opacity:.88}}
+  .tag{color:var(--muted);font-size:14px;max-width:60ch;line-height:1.6}
+  .tag b{color:var(--green)}.tag em{color:var(--red-b);font-style:normal}
+  .chips{display:flex;gap:12px;flex-wrap:wrap}
+  .vc{border:1px solid var(--green-dim);border-radius:5px;padding:7px 12px;background:rgba(8,26,15,.7);min-width:92px}
+  .vc .k{color:var(--faint);font-size:11px;letter-spacing:.1em}
+  .vc .v{font-family:var(--crt);font-size:24px;line-height:1;margin-top:2px}
+  .vc.hon .v{color:var(--green)}.vc.att .v{color:var(--red)}.vc .v.neu{color:var(--steel)}
+
+  .controls{display:flex;flex-wrap:wrap;gap:20px 28px;align-items:end;margin-top:22px}
+  .ctrl{display:flex;flex-direction:column;gap:7px;flex:1;min-width:210px}
+  .ctrl label{font-size:12px;letter-spacing:.05em;color:var(--muted);display:flex;justify-content:space-between;gap:10px;text-transform:uppercase}
+  .ctrl label b{color:var(--green);font-weight:400}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--green-dim);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--green);cursor:pointer;box-shadow:0 0 8px var(--green);border-radius:1px}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--green);border:none;cursor:pointer;border-radius:1px}
+  input#power::-webkit-slider-thumb{background:var(--red);box-shadow:0 0 8px var(--red)}
+  input#power::-moz-range-thumb{background:var(--red)}
+  input#power{background:var(--red-soft)}
+  .hint{font-size:12px}.hint.neu{color:var(--muted)}
+  .odds{font-size:12.5px;color:var(--muted)}.odds b{font-family:var(--mono)}
+  .btns{display:flex;gap:10px}
+  button{font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+    padding:11px 18px;border-radius:4px;border:1px solid var(--green-dim);background:transparent;color:var(--green);transition:background .12s,box-shadow .12s,transform .1s}
+  button:hover{background:var(--green-soft);box-shadow:0 0 12px rgba(60,255,120,.22)}
+  button:active{transform:translateY(1px)}
+  button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  button.primary{border-color:var(--red);color:var(--red)}
+  button.primary:hover{background:var(--red-soft);box-shadow:0 0 14px rgba(255,59,71,.32)}
+  button:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;background:transparent}
+
+  .banner{margin:20px 0;border:1px solid var(--green-dim);border-left:3px solid var(--green);background:rgba(8,26,15,.6);
+    padding:12px 16px;font-size:14.5px;min-height:48px;display:flex;align-items:center;gap:10px}
+  .banner .pr{color:var(--green);flex:none}
+  .banner.live .pr::after{content:"_";animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .banner.won{border-color:var(--red);border-left-color:var(--red);background:var(--red-soft);color:var(--red-b)}
+  .banner.won .pr{color:var(--red)}
+  .banner.failed{border-color:var(--green);border-left-color:var(--green);background:var(--green-soft)}
+
+  .stage{margin-top:6px;position:relative}
+  .track{margin-bottom:16px}.track:last-child{margin-bottom:4px}
+  .thead{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .thead .sub{color:var(--faint);text-transform:none;letter-spacing:.02em;font-size:12px}
+  .track.hon .nm{color:var(--green)}.track.att .nm{color:var(--red)}.track.tr .nm{color:var(--steel)}
+  .row{display:flex;gap:9px;overflow-x:auto;padding-bottom:9px;min-height:80px;scroll-behavior:smooth}
+  .row::-webkit-scrollbar{height:6px}.row::-webkit-scrollbar-thumb{background:var(--green-dim);border-radius:3px}
+
+  .block{flex:none;width:90px;border:1px solid var(--green-dim);border-radius:4px;padding:8px 9px;background:var(--panel2);
+    display:flex;flex-direction:column;gap:3px;position:relative;animation:drop .3s ease both}
+  @keyframes drop{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+  .block .h{font-size:13px}
+  .block .hash{font-size:11px;color:var(--muted);word-break:break-all}
+  .block .tx{font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .block.tr{border-color:rgba(82,199,176,.5);background:var(--steel-soft)}.block.tr .h{color:var(--steel)}
+  .block.hon{border-color:rgba(60,255,120,.45)}.block.hon .h{color:var(--green)}
+  .block.att{border-color:rgba(255,59,71,.5);background:var(--red-soft)}.block.att .h{color:var(--red)}
+  .block .hash.zero{color:var(--green);text-shadow:0 0 7px rgba(60,255,120,.5)}
+  .block.att .hash.zero{color:var(--red-b);text-shadow:0 0 7px rgba(255,59,71,.45)}
+  .block.deposit{box-shadow:0 0 0 1px var(--green) inset}
+  .block.selftx{box-shadow:0 0 0 1px var(--red) inset}
+  .block.mining{border-style:dashed;opacity:.95}.block.mining .tx{color:var(--ink)}
+  .block.mining.hon{box-shadow:0 0 12px rgba(60,255,120,.18)}
+  .block.mining.att{box-shadow:0 0 12px rgba(255,59,71,.22)}
+  .block.orphaned{animation:orph .55s ease forwards}
+  @keyframes orph{to{opacity:.22;filter:grayscale(.7);transform:translateY(8px) scale(.92)}}
+  .block.win{animation:wf 1s ease}
+  @keyframes wf{0%,100%{box-shadow:0 0 0 1px var(--red) inset}50%{box-shadow:0 0 16px var(--red)}}
+  .empty{color:var(--faint);font-size:13px;align-self:center}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}.legend i{width:10px;height:10px;border-radius:2px}
+  .l-h{background:var(--green)}.l-a{background:var(--red)}.l-t{background:var(--steel)}
+
+  .stamp{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:9;pointer-events:none}
+  .stamp.show{display:flex;animation:stampin .4s ease}
+  @keyframes stampin{from{opacity:0;transform:scale(1.2)}to{opacity:1;transform:none}}
+  .stamp .txt{font-family:var(--crt);font-size:clamp(30px,6vw,58px);line-height:.9;text-align:center;border:3px solid currentColor;padding:14px 30px;background:rgba(2,6,3,.85)}
+  .stamp.won .txt{color:var(--red);text-shadow:0 0 14px rgba(255,59,71,.55)}
+  .stamp.failed .txt{color:var(--green);text-shadow:0 0 14px rgba(60,255,120,.55)}
+  .stamp .txt small{display:block;font-family:var(--mono);font-size:14px;letter-spacing:.08em;margin-top:8px;opacity:.85}
+
+  #flash{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:0;background:var(--red)}
+  #flash.go{animation:fl .5s ease}
+  @keyframes fl{0%{opacity:.4}100%{opacity:0}}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  .box{border:1px solid var(--green-dim);background:rgba(5,17,10,.7);border-radius:5px;padding:14px 16px}
+  .box h2{font-family:var(--crt);font-size:22px;font-weight:400;margin:0 0 12px;color:var(--green);letter-spacing:.03em}
+  .lrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px dashed var(--green-dim)}
+  .lrow:last-child{border-bottom:none}
+  .lrow .lab{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .lrow .val{font-size:17px;text-align:right}.val.coins{color:var(--red)}.val.btc{color:var(--green)}.val.wallet{color:var(--amber)}
+  .o-win{color:var(--red)}.o-fail{color:var(--green)}.o-idle{color:var(--muted)}
+
+  .feed{font-size:12.5px;line-height:1.55;max-height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+  .feed::-webkit-scrollbar{width:6px}.feed::-webkit-scrollbar-thumb{background:var(--green-dim);border-radius:3px}
+  .feed .e{display:flex;gap:8px;color:var(--muted)}.feed .e .t{color:var(--faint);flex:none}
+  .feed .e.hon .t{color:var(--green)}.feed .e.att .t{color:var(--red)}
+  .feed .e.key{color:var(--ink)}.feed .e.win{color:var(--red-b)}.feed .e.fail{color:var(--green)}
+
+  footer{margin-top:24px;color:var(--faint);font-size:12.5px;max-width:90ch;line-height:1.65}
+  footer .c{color:var(--muted)}
+
+  @media (max-width:760px){.grid{grid-template-columns:1fr}.controls{flex-direction:column;align-items:stretch}.ctrl{min-width:0}.btns button{flex:1}}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;scroll-behavior:auto!important}#rain{display:none}h1{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+<div id="flash"></div>
+
+<div class="wrap">
+  <div class="term">
+    <div class="barwin">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="path">analyst@chain-sim</span>:~$ ./simulate --attack=double-spend
+    </div>
+    <div class="pad">
+
+      <header>
+        <div>
+          <h1>51% ATTACK</h1>
+          <p class="tag">An interactive model of how a miner controlling most of a network's hashpower can privately rebuild the chain, reverse a confirmed deposit, and spend the same coins twice. Adjust the parameters to see when an <em>attacker</em> succeeds &mdash; and how the <b>honest network</b>'s confirmation requirement makes it progressively harder.</p>
+        </div>
+        <div class="chips">
+          <div class="vc hon"><div class="k">HONEST CHAIN</div><div class="v" id="tPublic">0</div></div>
+          <div class="vc att"><div class="k">ATTACKER FORK</div><div class="v" id="tAttacker">0</div></div>
+          <div class="vc"><div class="k">HONEST LEAD</div><div class="v neu" id="tLead">--</div></div>
+        </div>
+      </header>
+
+      <div class="controls">
+        <div class="ctrl">
+          <label>Attacker hashpower <b id="powerVal">35%</b></label>
+          <input type="range" id="power" min="5" max="95" value="35" step="1">
+          <span class="odds" id="oddsLine"></span>
+        </div>
+        <div class="ctrl" style="max-width:250px">
+          <label>Exchange confirmations <b id="confVal">6</b></label>
+          <input type="range" id="conf" min="1" max="12" value="6" step="1">
+          <span class="hint neu">blocks the exchange waits before releasing funds</span>
+        </div>
+        <div class="ctrl" style="max-width:240px">
+          <label>Attacker patience <b id="gapVal">8</b></label>
+          <input type="range" id="gap" min="2" max="30" value="8" step="1">
+          <span class="hint neu">blocks behind before the attacker gives up</span>
+        </div>
+        <div class="ctrl" style="max-width:190px">
+          <label>Clock speed <b id="speedVal">normal</b></label>
+          <input type="range" id="speed" min="1" max="5" value="3" step="1">
+          <span class="hint neu">animation pace only</span>
+        </div>
+        <div class="btns">
+          <button class="primary" id="launch">Run attack</button>
+          <button id="reset">Reset</button>
+        </div>
+      </div>
+
+      <div class="banner" id="banner"><span class="pr">&gt;</span><span id="bannerText">Set the attacker's hashpower and the exchange's confirmation requirement, then run the simulation.</span></div>
+
+      <div class="stage">
+        <div class="stamp" id="stamp"><div class="txt" id="stampTxt"></div></div>
+
+        <div class="track tr">
+          <div class="thead"><span class="nm">shared ledger</span><span class="sub">identical on both chains</span></div>
+          <div class="row" id="rowTrunk"></div>
+        </div>
+        <div class="track hon">
+          <div class="thead"><span class="nm">honest network &mdash; public chain</span><span class="sub" id="subHonest"></span></div>
+          <div class="row" id="rowHonest"></div>
+        </div>
+        <div class="track att">
+          <div class="thead"><span class="nm">attacker &mdash; private fork</span><span class="sub" id="subAttacker"></span></div>
+          <div class="row" id="rowAttacker"></div>
+        </div>
+        <div class="legend">
+          <span><i class="l-t"></i>shared</span>
+          <span><i class="l-h"></i>honest</span>
+          <span><i class="l-a"></i>attacker</span>
+          <span>glowing hash = valid proof-of-work</span>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="box">
+          <h2>Double-spend ledger</h2>
+          <div class="lrow"><span class="lab">Attacker's original coins</span><span class="val coins" id="ledCoins">10 in wallet</span></div>
+          <div class="lrow"><span class="lab">Withdrawn from exchange</span><span class="val btc" id="ledBtc">0 BTC</span></div>
+          <div class="lrow"><span class="lab">Attacker's wallet now holds</span><span class="val wallet" id="ledWallet">10 coins</span></div>
+          <div class="lrow"><span class="lab">Outcome</span><span class="val" id="ledOut"><span class="o-idle">idle</span></span></div>
+        </div>
+        <div class="box">
+          <h2>Event log</h2>
+          <div class="feed" id="log"></div>
+        </div>
+      </div>
+
+      <footer>
+        <span class="c">Model.</span> Each step is a weighted coin-flip against the attacker's hashpower: win the flip and the attacker extends a private fork that pays the deposited coins back to itself; otherwise the honest network extends the public chain. The exchange releases funds once the deposit reaches the required confirmations. The attacker reveals the fork only once it is longer than the public chain, forcing a reorganization that orphans the deposit. <span class="c">Success estimate.</span> The figure under the hashpower control is a Monte-Carlo estimate (thousands of runs of this same model) of how often the attack succeeds at the current settings &mdash; closely tracking Nakamoto's double-spend probability from the Bitcoin whitepaper. A minority attacker can still succeed over few confirmations, which is precisely why exchanges wait for many; at or above 50% hashpower, success becomes a matter of time. No signatures are forged &mdash; the attacker only ever rewrites <span class="c">its own</span> transaction. <span class="c">Attacker patience</span> is how many blocks behind the attacker keeps trying before abandoning the fork; raising it models a more patient attacker and pushes the estimate up toward the theoretical (infinitely patient) Nakamoto probability.
+      </footer>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const rnd = n => Math.random().toString(16).slice(2,2+n).padEnd(n,'0');
+  const reduced = matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  const TRUNK_START=1000, TRUNK_LEN=3, FORK_HEIGHT=TRUNK_START+TRUNK_LEN-1;
+  let FAIL_GAP=8;
+  const SPEEDS={1:760,2:520,3:340,4:200,5:110};
+  const SPEED_LABEL={1:'crawl',2:'slow',3:'normal',4:'fast',5:'turbo'};
+
+  let state=null, timer=null, flick=null;
+
+  function fresh(){
+    return {power:+$('power').value/100, conf:+$('conf').value,
+      publicChain:[], attackerChain:[], credited:false, phase:'idle'};
+  }
+  const winHash=()=>'0000'+rnd(4);
+
+  function blockEl(h,hash,tx,cls){
+    const d=document.createElement('div'); d.className='block '+cls;
+    d.innerHTML='<span class="h">#'+h+'</span><span class="hash'+(hash.startsWith('0000')?' zero':'')+'">'+hash+'</span><span class="tx">'+(tx||'&mdash;')+'</span>';
+    return d;
+  }
+  function renderTrunk(){
+    const r=$('rowTrunk'); r.innerHTML='';
+    for(let i=0;i<TRUNK_LEN;i++) r.appendChild(blockEl(TRUNK_START+i, winHash(), i===TRUNK_LEN-1?'fork point':'', 'tr'));
+  }
+  function renderChain(rowId,chain,side,mining){
+    const r=$(rowId); r.innerHTML='';
+    if(chain.length===0 && !mining){
+      const n=document.createElement('span'); n.className='empty';
+      n.textContent=side==='att'?'no secret blocks':'awaiting block'; r.appendChild(n);
+    }
+    chain.forEach(b=>{
+      const cls=side+(b.deposit?' deposit':'')+(b.selftx?' selftx':'')+(b.orphaned?' orphaned':'')+(b.win?' win':'');
+      r.appendChild(blockEl(b.h,b.hash,b.tx,cls));
+    });
+    if(mining){
+      const m=blockEl(FORK_HEIGHT+chain.length+1, rnd(8), 'mining', side+' mining');
+      m.dataset.mining='1'; r.appendChild(m);
+    }
+    r.scrollLeft=r.scrollWidth;
+  }
+  function renderAll(){
+    const racing=state.phase==='racing';
+    renderChain('rowHonest',state.publicChain,'hon',racing);
+    renderChain('rowAttacker',state.attackerChain,'att',racing);
+    $('subHonest').textContent=state.publicChain.length+' block(s) since fork';
+    $('subAttacker').textContent='forked from #'+FORK_HEIGHT+' \u00b7 '+state.attackerChain.length+' secret block(s)';
+    const pub=state.publicChain.length, att=state.attackerChain.length, lead=pub-att;
+    $('tPublic').textContent=pub; $('tAttacker').textContent=att;
+    $('tLead').textContent=state.phase==='idle'?'--':(lead>0?'+'+lead:lead);
+    $('tLead').style.color=lead>0?'var(--green)':lead<0?'var(--red)':'var(--steel)';
+  }
+
+  function log(msg,kind){
+    const e=document.createElement('div'); e.className='e '+(kind||'');
+    const h=state?(FORK_HEIGHT+Math.max(state.publicChain.length,state.attackerChain.length)):FORK_HEIGHT;
+    e.innerHTML='<span class="t">'+h+'&gt;</span><span>'+msg+'</span>';
+    $('log').appendChild(e); $('log').scrollTop=$('log').scrollHeight;
+  }
+  function banner(t,cls){ $('banner').className='banner'+(cls?' '+cls:''); $('bannerText').textContent=t; }
+  function flash(){ const f=$('flash'); f.style.background=state.phase==='won'?'var(--red)':'var(--green)'; f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+  function stamp(line,sub,cls){
+    const s=$('stamp'); s.className='stamp show '+cls;
+    $('stampTxt').innerHTML=line+'<small>'+sub+'</small>';
+    setTimeout(()=>s.classList.remove('show'),2000);
+  }
+
+  // Monte-Carlo success estimate using the exact simulation rules
+  function estimateOdds(q,conf,trials){
+    let w=0;
+    for(let n=0;n<trials;n++){
+      let pub=0,att=0,cr=false;
+      for(let i=0;i<20000;i++){
+        if(Math.random()<q) att++; else pub++;
+        if(!cr && pub>=conf) cr=true;
+        if(cr && att>pub){ w++; break; }
+        if(cr && (pub-att)>=FAIL_GAP) break;
+      }
+    }
+    return w/trials;
+  }
+  function updateOdds(){
+    const q=+$('power').value/100, z=+$('conf').value;
+    $('powerVal').textContent=Math.round(q*100)+'%';
+    $('confVal').textContent=z;
+    const p=estimateOdds(q,z,4000), pct=Math.round(p*100);
+    const col = q>=0.5 ? 'var(--red)' : pct<25 ? 'var(--green)' : pct<60 ? 'var(--amber)' : 'var(--red)';
+    const label = q>=0.5 ? 'eventual success once the fork is longer' : 'over '+z+' confirmation'+(z===1?'':'s');
+    $('oddsLine').innerHTML='estimated attack success: <b style="color:'+col+'">'+pct+'%</b> '+label;
+  }
+
+  function startFlick(){ if(reduced)return; stopFlick();
+    flick=setInterval(()=>{document.querySelectorAll('.block.mining .hash').forEach(h=>h.textContent=rnd(8));},70);
+  }
+  function stopFlick(){ if(flick){clearInterval(flick);flick=null;} }
+
+  function launch(){
+    reset(true); state.phase='racing';
+    $('launch').disabled=true; $('power').disabled=true; $('conf').disabled=true; $('gap').disabled=true;
+    banner('Attacker broadcasts a deposit of 10 coins to the exchange.', 'live');
+    log('deposit of 10 coins sent to exchange','key');
+    log('attacker begins mining a private fork that returns the coins to itself','att');
+    $('ledCoins').textContent='10 at exchange'; $('ledWallet').textContent='\u2014 (nothing yet)';
+    renderAll(); startFlick();
+    timer=setTimeout(tick,SPEEDS[+$('speed').value]);
+  }
+
+  function tick(){
+    if(!state||state.phase!=='racing')return;
+    if(Math.random()<state.power){
+      const n=state.attackerChain.length, first=n===0;
+      state.attackerChain.push({h:FORK_HEIGHT+n+1,hash:winHash(),tx:first?'-> self: 10':'',selftx:first});
+      log('attacker mines a private block','att');
+    }else{
+      const n=state.publicChain.length, first=n===0;
+      state.publicChain.push({h:FORK_HEIGHT+n+1,hash:winHash(),tx:first?'-> exchange: 10':'',deposit:first});
+      log('honest network extends the public chain','hon');
+    }
+    if(!state.credited && state.publicChain.length>=state.conf){
+      state.credited=true; $('ledBtc').textContent='10 BTC'; $('ledWallet').textContent='10 BTC';
+      log('exchange reaches '+state.conf+' confirmations and releases 10 BTC','key');
+    }
+    const lead=state.publicChain.length-state.attackerChain.length;
+    if(state.credited && state.attackerChain.length>state.publicChain.length) return finishWin();
+    if(state.credited && lead>=FAIL_GAP) return finishFail();
+    renderAll(); timer=setTimeout(tick,SPEEDS[+$('speed').value]);
+  }
+
+  function finishWin(){
+    state.phase='won'; stopFlick();
+    state.publicChain.forEach(b=>b.orphaned=true);
+    state.attackerChain.forEach(b=>b.win=true);
+    $('ledCoins').textContent='10 back in wallet'; $('ledBtc').textContent='10 BTC';
+    $('ledWallet').textContent='10 coins + 10 BTC';
+    $('ledOut').innerHTML='<span class="o-win">double-spend succeeded \u00b7 +10 BTC</span>';
+    renderAll();
+    banner('The attacker\u2019s fork is longer. A reorganization orphans the deposit \u2014 the double-spend succeeds.','won');
+    log('attacker fork overtakes the public chain and is revealed','win');
+    log('reorganization \u2014 the deposit block is orphaned','win');
+    log('attacker retains the 10 coins and keeps the 10 BTC withdrawn','win');
+    flash(); stamp('DOUBLE-SPEND SUCCEEDED','confirmed deposit reversed','won');
+    endBtns();
+  }
+  function finishFail(){
+    state.phase='failed'; stopFlick();
+    $('ledCoins').textContent='10 kept by exchange'; $('ledWallet').textContent='10 BTC';
+    $('ledOut').innerHTML='<span class="o-fail">attack failed \u00b7 even trade</span>';
+    renderAll();
+    banner('The honest chain pulled too far ahead. The attacker abandons the fork \u2014 the deposit stands.','failed');
+    log('honest lead reached +'+FAIL_GAP+'; catching up is no longer feasible','fail');
+    log('attacker abandons the fork \u2014 the deposit remains confirmed','fail');
+    flash(); stamp('ATTACK FAILED','honest chain prevailed','failed');
+    endBtns();
+  }
+  function endBtns(){ $('launch').disabled=false; $('launch').textContent='Run again'; $('power').disabled=false; $('conf').disabled=false; $('gap').disabled=false; }
+
+  function reset(keep){
+    clearTimeout(timer); stopFlick(); state=fresh(); renderTrunk();
+    $('ledCoins').textContent='10 in wallet'; $('ledBtc').textContent='0 BTC';
+    $('ledWallet').textContent='10 coins';
+    $('ledOut').innerHTML='<span class="o-idle">idle</span>';
+    $('stamp').className='stamp';
+    if(!keep){
+      $('log').innerHTML=''; banner('Set the attacker\u2019s hashpower and the exchange\u2019s confirmation requirement, then run the simulation.');
+      $('launch').disabled=false; $('launch').textContent='Run attack'; $('power').disabled=false; $('conf').disabled=false; $('gap').disabled=false;
+    }
+    renderAll();
+  }
+
+  function rain(){
+    if(reduced) return;
+    const c=$('rain'), x=c.getContext('2d');
+    let cols,drops,fs=15;
+    const glyphs='01<>[]{}/\\|=+*ABCDEF0123456789#x'.split('');
+    function size(){ c.width=innerWidth; c.height=innerHeight; cols=Math.floor(c.width/fs); drops=Array(cols).fill(0).map(()=>Math.random()*-50); }
+    size(); addEventListener('resize',size);
+    setInterval(()=>{
+      x.fillStyle='rgba(2,6,3,.12)'; x.fillRect(0,0,c.width,c.height); x.font=fs+'px monospace';
+      for(let i=0;i<cols;i++){
+        const g=glyphs[Math.floor(Math.random()*glyphs.length)], y=drops[i]*fs;
+        x.fillStyle = Math.random()<0.01 ? '#FF3B47' : '#3CFF78';
+        x.fillText(g,i*fs,y);
+        if(y>c.height && Math.random()>0.975) drops[i]=0;
+        drops[i]++;
+      }
+    },55);
+  }
+
+  $('power').addEventListener('input',updateOdds);
+  $('conf').addEventListener('input',updateOdds);
+  $('gap').addEventListener('input',()=>{ FAIL_GAP=+$('gap').value; $('gapVal').textContent=FAIL_GAP; updateOdds(); });
+  $('speed').addEventListener('input',()=>{$('speedVal').textContent=SPEED_LABEL[+$('speed').value];});
+  $('launch').addEventListener('click',launch);
+  $('reset').addEventListener('click',()=>reset(false));
+
+  FAIL_GAP=+$('gap').value; $('gapVal').textContent=FAIL_GAP; updateOdds(); $('speedVal').textContent=SPEED_LABEL[+$('speed').value];
+  reset(false); rain();
+})();
+</script>
+</body>
+</html>
