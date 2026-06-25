@@ -5,8 +5,9 @@ I built this interactive simulation of a **51% attack** to understand the concep
 You can set the attacker's hashpower, the number of confirmations the exchange waits, and how patient the attacker is, then watch the honest chain and the attacker's secret fork race block by block and see the estimated odds of success update live. The notes below explain the mechanics, the math behind the odds (the Nakamoto double-spend probability), and the questions that tend to come up while playing with it.
 
 > Built with the help of Claude (Anthropic); I directed the design, decided what to model, and verified the logic and the math. The simulations are deliberately simplified teaching tools, not production-grade models. See the notes for exactly which parts are rigorous and which are illustrative.
+
 [![51% attack simulator demo](assets/51_attack.gif)](https://<Aleksandra1104>.github.io/<crypto-attack-visualized>/)
-<img src="assets/51_attack.gif" alt="51% attack simulator demo" width="600">
+
 
 ## How the attack odds work (Nakamoto double-spend probability)
 
