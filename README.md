@@ -40,6 +40,8 @@ P(success) = 1            when q ≥ p   (a majority attacker eventually always 
 - **`λ = z · (q/p)`** is the attacker's _expected_ number of secret blocks by the time the honest chain reaches `z`. (The honest side did `z` blocks; the attacker mines at relative rate `q/p`, so on average it gets `z·(q/p)`.) 
     
 - **`e^(−λ) · λ^k / k!`** is the **Poisson probability** of the attacker having mined _exactly_ `k` secret blocks, given the average is `λ`. Poisson is the standard formula for "how many independent, rare events happened at a known average rate" — exactly the situation for blocks found by mining. `λ^k` lifts the likely count toward the average, `k!` (factorial) crushes counts far above it, and `e^(−λ)` (e ≈ 2.718) is a fixed scaling factor that makes all the probabilities sum to 1. The result is a hump centred on `λ`.
+
+- **`[ 1 − (q/p)^(z−k) ]`** is the gambler's ruin. If the honest chain has z and the attacker has k, the attacker is behind by (z − k) blocks. The probability of ever catching up from g blocks behind, when you're the weaker miner, is `(q/p)^g`. Since q < p, the ratio `q/p` is less than 1, so raised to a power it shrinks fast — being far behind is nearly hopeless. So `(q/p)^(z−k)` = the chance the attacker, currently (z−k) behind, eventually catches up. Therefore `[ 1 − (q/p)^(z−k) ]` = the chance they fail to catch up (1 minus the chance they succeed).
     
 - **`Σ (k = 0 … z)`** means "sum over every possible head start." We don't know how many secret blocks `k` the attacker actually got, so we walk through each possibility, weight it by its Poisson likelihood, multiply by the chance it _still_ fails to catch up — `[ 1 − (q/p)^(z−k) ]` — and add them all up. That total is the probability the attacker **loses**.
     
