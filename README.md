@@ -6,7 +6,7 @@ You can set the attacker's hashpower, the number of confirmations the exchange w
 
 > Built with the help of Claude (Anthropic); I directed the design, decided what to model, and verified the logic and the math. The simulations are deliberately simplified teaching tools, not production-grade models. See the notes for exactly which parts are rigorous and which are illustrative.
 
-[![51% attack simulator demo](assets/51_attack.gif)](https://<Aleksandra1104>.github.io/<crypto-attack-visualized>/)
+[![51% attack simulator demo](assets/51_attack.gif)](https://aleksandra1104.github.io/crypto-attack-visualized/)
 
 
 ## How the attack odds work (Nakamoto double-spend probability)
